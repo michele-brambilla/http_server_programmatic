@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	yaml "gopkg.in/yaml.v3"
 	"io"
@@ -67,25 +68,35 @@ func getHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	var configuration_file string
+	var help bool
 
-	f, err := os.ReadFile("./resources/config.yaml")
-	if err != nil {
-		log.Fatal(err)
-	}
+	flag.StringVar(&configuration_file, "c", "./resources/config.yaml", "Configuration file")
+	flag.BoolVar(&help, "help", false, "Help")
+	flag.Parse()
 
-	err = yaml.Unmarshal(f, &data)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if help {
+		flag.PrintDefaults()
+	} else {
+		f, err := os.ReadFile(configuration_file)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	http.HandleFunc("/health", getHealth)
+		err = yaml.Unmarshal(f, &data)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	listen_on := fmt.Sprintf(":%d", data["port"])
-	err = http.ListenAndServe(listen_on, nil)
-	if errors.Is(err, http.ErrServerClosed) {
-		fmt.Printf("server closed\n")
-	} else if err != nil {
-		fmt.Printf("error starting server: %s\n", err)
-		os.Exit(1)
+		http.HandleFunc("/health", getHealth)
+
+		listen_on := fmt.Sprintf(":%d", data["port"])
+		err = http.ListenAndServe(listen_on, nil)
+		if errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("server closed\n")
+		} else if err != nil {
+			fmt.Printf("error starting server: %s\n", err)
+			os.Exit(1)
+		}
 	}
 }
