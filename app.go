@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	yaml "gopkg.in/yaml.v3"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,12 +13,14 @@ import (
 
 const keyServerAddr = "serverAddr"
 
+var data map[string]interface{}
+
 func fileExists(filename string) bool {
-   info, err := os.Stat(filename)
-   if os.IsNotExist(err) {
-      return false
-   }
-   return !info.IsDir()
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func getHealth(w http.ResponseWriter, r *http.Request) {
@@ -32,13 +36,19 @@ func getHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	service := r.URL.Query().Get("service")
-	bash_script := fmt.Sprintf("./resources/%s.sh", service)
- 	if !fileExists(bash_script) {
-      fmt.Printf("File %s does not exist\n", bash_script)
-      return
-   	}
+	service_config := fmt.Sprintf("service.%s", service)
 
-	fmt.Printf("./resources/%s.sh\n", service)
+	bash_script, ok := data[service_config].(string)
+	if !ok {
+		fmt.Println("missing service")
+		return
+	}
+
+	if !fileExists(bash_script) {
+		fmt.Printf("File %s does not exist\n", bash_script)
+		return
+	}
+
 	out, err := exec.Command("/bin/bash", bash_script).Output()
 	if err != nil {
 		w.Header().Set("x-missing-field", "service")
@@ -51,16 +61,27 @@ func getHealth(w http.ResponseWriter, r *http.Request) {
 		ctx.Value(keyServerAddr),
 		hasService, service)
 
-	// var reply string
 	reply := string(out)
 	fmt.Printf("service %s: %s\n", service, string(out))
 	io.WriteString(w, reply)
 }
 
 func main() {
+
+	f, err := os.ReadFile("./resources/config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = yaml.Unmarshal(f, &data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	http.HandleFunc("/health", getHealth)
 
-	err := http.ListenAndServe(":3333", nil)
+	listen_on := fmt.Sprintf(":%d", data["port"])
+	err = http.ListenAndServe(listen_on, nil)
 	if errors.Is(err, http.ErrServerClosed) {
 		fmt.Printf("server closed\n")
 	} else if err != nil {

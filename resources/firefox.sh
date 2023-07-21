@@ -1,2 +1,2 @@
 #!/bin/bash
-pgrep firefoxw >& /dev/null && echo 1 || echo 0
+pgrep firefox >& /dev/null && echo 1 || echo 0
